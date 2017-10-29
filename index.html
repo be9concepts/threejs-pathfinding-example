@@ -1,0 +1,163 @@
+<html>
+	<head>
+		<title>Three.js Pathfinding Example</title>
+		<style>
+			body { margin: 0; }
+			canvas { width: 100%; height: 100% }
+		</style>
+	</head>
+	<body>
+		<script src="js/three.min.js"></script>
+		<script src="js/OrbitControls.js"></script>
+		<script src="js/astar.js"></script>
+		<script>
+			var scene = new THREE.Scene();
+			var camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+			var mouse = new THREE.Vector2();
+			document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+			document.addEventListener( 'click', onDocumentClick, false );
+
+			var renderer = new THREE.WebGLRenderer();
+			renderer.setSize( window.innerWidth, window.innerHeight );
+			document.body.appendChild( renderer.domElement );
+			var grid = {};
+			grid.nodes = [];
+			grid.size = {
+				width:10,
+				height:10
+			}
+				var node_size = new THREE.Vector3(1,.1,1)
+			grid.makeNode = function(position, dex){
+				var rand = Math.floor(Math.random()*10);
+				var isWall = false;
+				var color = 0xff0000;
+				var node_geo = new THREE.CubeGeometry(node_size.x,node_size.y,node_size.z);
+				if (rand ==  0) {
+					isWall = true;
+					node_geo = new THREE.CubeGeometry(node_size.x,5,node_size.z);
+					color = 0xafafaf;
+					row.push(0);
+				}
+				else {
+					row.push(1);
+				}
+				var node = new THREE.Mesh(node_geo);
+				node.material.color.setHex(color);
+				node.originalColor = node.material.color.getHex();
+				scene.add(node);
+				node.isWall = isWall;
+				node.position.x = position.x + (node_size.x/2);
+				node.position.y = position.y + (node_size.y/2);
+				if (isWall) node.position.y = 5/2
+				node.position.z = position.z + (node_size.z/2);
+				node.z = dex.across;
+				node.x = dex.down;
+				grid.nodes.push(node);
+				
+			}
+			grid.rows = [];
+			var row = [];
+			grid.draw = function(){
+				var node_count = grid.size.width * grid.size.height;
+				var index = {
+					across:0,
+					down:0
+				}
+				for (var i = 0; i < node_count; i++) {
+					grid.makeNode(new THREE.Vector3((-grid.size.width/2)+(node_size.x*index.across), 0, (-grid.size.height/2)+(node_size.z*index.down)),index);
+					index.across++;
+					if (index.across >= grid.size.width){
+						index.across = 0;
+						index.down++;
+						grid.rows.push(row);
+						row = [];
+					}					
+				}
+				console.log(grid.rows)
+			}
+
+
+			grid.draw();
+
+			// create the thing we want to move
+			var geometry = new THREE.CylinderGeometry( .5,.5, 3);
+			var material = new THREE.MeshBasicMaterial( {color: 0x00ff00} );
+			var player = new THREE.Mesh( geometry, material );
+			scene.add( player );
+
+			player.position.x = grid.nodes[0].position.x;
+			player.position.y = 1.5;
+			player.position.z = grid.nodes[0].position.z;
+
+			// create the thing we want to move to
+			var geometry = new THREE.CylinderGeometry( .25,.25, 3);
+			var material = new THREE.MeshBasicMaterial( {color: 0xffffff} );
+			var goal = new THREE.Mesh( geometry, material );
+			scene.add( goal );
+
+			goal.position.x = grid.nodes[grid.nodes.length-1].position.x;
+			goal.position.y = 1.5;
+			goal.position.z = grid.nodes[grid.nodes.length-1].position.z;
+
+
+			camera.position.z = 11;
+			camera.position.y = 25;
+			camera.lookAt(new THREE.Vector3(0,0,0))
+			var controls = new THREE.OrbitControls( camera, renderer.domElement );
+			var raycaster = new THREE.Raycaster();
+			var animate = function () {
+				controls.update(); // required if controls.enableDamping = true, or if controls.autoRotate = true
+				requestAnimationFrame( animate );
+				renderer.render(scene, camera);
+			};
+
+
+			animate();
+			function onDocumentMouseMove( event ) {
+				event.preventDefault();
+				mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+				mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+			}
+			function onDocumentClick(event){
+
+				// raycast from camera to mouse.
+				// check against nodes in grid.
+				raycaster.setFromCamera( mouse, camera );
+				var intersects = raycaster.intersectObjects( grid.nodes );
+				if (intersects.length > 0){
+					var node = intersects[0].object;
+					if (!node.isWall){
+						goal.position.x = node.position.x;
+						goal.position.z = node.position.z;
+						// make graph
+						var graph = new Graph([
+							grid.rows[0],grid.rows[1],grid.rows[2],grid.rows[3],grid.rows[4],grid.rows[5],grid.rows[6],grid.rows[7],grid.rows[8],grid.rows[9]
+						]);
+
+						// solve
+						var start = graph.grid[0][0];
+						var end = graph.grid[node.x][node.z];
+						var result = astar.search(graph, start, end);
+						console.log(result[0].x,result[0].y)
+
+						// reset node colors
+						for (var i = 0; i < grid.nodes.length; i++) {
+							grid.nodes[i].material.color.setHex(grid.nodes[i].originalColor)
+						}
+						// highlight nodes in path
+						for (var i = 0; i < grid.nodes.length; i++) {
+							var node1 = grid.nodes[i]
+							if (node1.isWall) continue;
+							for (var j = 0; j < result.length; j++) {
+								var resNode = result[j]
+								if (node1.x == resNode.x && node1.z ==resNode.y){
+									node1.material.color.setHex(0xfcbbcf)
+								}
+							}
+						}
+					}
+				}
+			}
+		</script>
+	</body>
+</html>
